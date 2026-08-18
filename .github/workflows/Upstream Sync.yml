@@ -7,8 +7,8 @@ permissions:
 
 on:
   schedule:
-    - cron: '0 23 * * *' 
-  workflow_dispatch:    # 手动触发
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
 jobs:
   sync_latest_from_upstream:
@@ -27,20 +27,31 @@ jobs:
         with:
           actions: 'close-issues'
           labels: '🚨 Sync Fail'
-      - name: Test action accessibility
-        run: |
-          curl -sI https://api.github.com/repos/aormsby/Fork-Sync-With-Upstream-action/tarball/v3.4.1 | head -5
-          echo "---"
-          curl -sI https://codeload.github.com/aormsby/Fork-Sync-With-Upstream-action/tar.gz/refs/tags/v3.4.1 | head -5
-      - name: Upstream Sync
+
+      # ❌ 已删除 Test action accessibility（不再需要）
+      # ❌ 已删除 aormsby/Fork-Sync-With-Upstream-action（问题根源）
+      # ✅ 替换为原生 Git 同步
+      - name: Sync from upstream gh-pages
         id: sync
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
-        with:
-          target_sync_branch: gh-pages
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
-          upstream_sync_repo: jaywcjlove/linux-command
-          upstream_sync_branch: gh-pages
-          test_mode: false
+        run: |
+          git remote add upstream https://github.com/jaywcjlove/linux-command.git 2>/dev/null || true
+          git fetch upstream gh-pages
+
+          LOCAL=$(git rev-parse HEAD)
+          UPSTREAM=$(git rev-parse upstream/gh-pages)
+
+          if [ "$LOCAL" != "$UPSTREAM" ]; then
+            echo "🔄 New commits detected, fast-forward merging..."
+            git merge --ff-only upstream/gh-pages || {
+              echo "::error::Fast-forward merge failed. Manual intervention required."
+              exit 1
+            }
+            git push origin gh-pages
+            echo "has_new_commits=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Already up to date."
+            echo "has_new_commits=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Trigger deploy event on new commits
         if: steps.sync.outputs.has_new_commits == 'true'
@@ -61,9 +72,7 @@ jobs:
           title: '🚨 同步失败 | Sync Fail'
           labels: '🚨 Sync Fail'
           body: |
-            由于上游仓库的 workflow 文件变更或网络问题，导致 GitHub 自动暂停了本次自动更新。
-            
-            请尝试以下操作：
-            1. 手动点击 "Sync Fork" 按钮同步一次
-            2. 检查上游仓库 jaywcjlove/linux-command 的 gh-pages 分支状态
-            3. 查看本 Workflow 的运行日志获取详细错误信息
+            上游同步失败，请手动排查：
+            1. 访问 https://github.com/jaywcjlove/linux-command/tree/gh-pages 确认分支存在
+            2. 本地执行 `git fetch upstream gh-pages && git merge --ff-only upstream/gh-pages` 测试
+            3. 查看本 Workflow 日志获取详细 Git 错误信息
