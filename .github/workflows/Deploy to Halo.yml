@@ -1,0 +1,42 @@
+name: Deploy to Halo
+on:
+  push:
+    branches: [gh-pages]       # 👈 改为监听 gh-pages 分支
+  repository_dispatch:
+    types: [deploy]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages        # 👈 显式指定检出 gh-pages 分支
+
+      # 👇 无需 Node.js、无需 npm ci、无需构建
+      # gh-pages 已经是纯静态文件，直接部署即可
+      - name: Inject absolute paths for Halo
+        run: |
+          # 定义 Halo 页面的基础路径前缀
+          BASE_PATH="/command"
+          # 替换所有资源引用为绝对路径
+          sed -i "s|href=\"img/|href=\"${BASE_PATH}/img/|g" index.html
+          sed -i "s|href=\"css/|href=\"${BASE_PATH}/css/|g" index.html
+          sed -i "s|src=\"js/|src=\"${BASE_PATH}/js/|g" index.html
+          sed -i "s|src=\"img/|src=\"${BASE_PATH}/img/|g" index.html
+          sed -i "s|href=\"hot.html\"|href=\"${BASE_PATH}/hot.html\"|g" index.html
+          sed -i "s|href=\"contributors.html\"|href=\"${BASE_PATH}/contributors.html\"|g" index.html
+          sed -i "s|href=\"index.html\"|href=\"${BASE_PATH}/index.html\"|g" index.html
+          # 验证替换结果
+          echo "=== 验证资源路径 ==="
+          grep -oE '(href|src)="[^"]*"' index.html | head -20
+
+      - name: Deploy to Halo
+        run: |
+          npx halo-static-pages-deploy-cli deploy \
+            -e "${{ secrets.ENDPOINT }}" \
+            -i "${{ secrets.ID }}" \
+            -t "${{ secrets.PAT }}" \
+            -f .               # 👈 改为当前目录（gh-pages 根目录即为站点根）
