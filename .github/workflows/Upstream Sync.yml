@@ -27,7 +27,11 @@ jobs:
         with:
           actions: 'close-issues'
           labels: '🚨 Sync Fail'
-
+      - name: Test action accessibility
+        run: |
+          curl -sI https://api.github.com/repos/aormsby/Fork-Sync-With-Upstream-action/tarball/v3.4.1 | head -5
+          echo "---"
+          curl -sI https://codeload.github.com/aormsby/Fork-Sync-With-Upstream-action/tar.gz/refs/tags/v3.4.1 | head -5
       - name: Upstream Sync
         id: sync
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
