@@ -1,78 +1,31 @@
-name: Upstream Sync
+name: Upstream Sync Test
 
 permissions:
   contents: write
-  issues: write
-  actions: write
 
 on:
-  schedule:
-    - cron: '0 23 * * *'
   workflow_dispatch:
 
 jobs:
-  sync_latest_from_upstream:
-    name: Sync latest commits from upstream repo
+  test_sync:
     runs-on: ubuntu-latest
     if: ${{ github.event.repository.fork }}
-
     steps:
       - uses: actions/checkout@v4
         with:
           ref: gh-pages
           fetch-depth: 0
 
-      - name: Clean issue notice
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'close-issues'
-          labels: '🚨 Sync Fail'
-
-      # ❌ 已删除 Test action accessibility（不再需要）
-      # ❌ 已删除 aormsby/Fork-Sync-With-Upstream-action（问题根源）
-      # ✅ 替换为原生 Git 同步
-      - name: Sync from upstream gh-pages
-        id: sync
+      - name: Pure Git Sync Only
         run: |
           git remote add upstream https://github.com/jaywcjlove/linux-command.git 2>/dev/null || true
           git fetch upstream gh-pages
-
           LOCAL=$(git rev-parse HEAD)
           UPSTREAM=$(git rev-parse upstream/gh-pages)
-
           if [ "$LOCAL" != "$UPSTREAM" ]; then
-            echo "🔄 New commits detected, fast-forward merging..."
-            git merge --ff-only upstream/gh-pages || {
-              echo "::error::Fast-forward merge failed. Manual intervention required."
-              exit 1
-            }
+            git merge --ff-only upstream/gh-pages
             git push origin gh-pages
-            echo "has_new_commits=true" >> $GITHUB_OUTPUT
+            echo "✅ Synced successfully"
           else
-            echo "✅ Already up to date."
-            echo "has_new_commits=false" >> $GITHUB_OUTPUT
+            echo "✅ Already up to date"
           fi
-
-      - name: Trigger deploy event on new commits
-        if: steps.sync.outputs.has_new_commits == 'true'
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            github.rest.repos.createDispatchEvent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              event_type: 'deploy'
-            })
-
-      - name: Sync check
-        if: failure()
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: 'create-issue'
-          title: '🚨 同步失败 | Sync Fail'
-          labels: '🚨 Sync Fail'
-          body: |
-            上游同步失败，请手动排查：
-            1. 访问 https://github.com/jaywcjlove/linux-command/tree/gh-pages 确认分支存在
-            2. 本地执行 `git fetch upstream gh-pages && git merge --ff-only upstream/gh-pages` 测试
-            3. 查看本 Workflow 日志获取详细 Git 错误信息
