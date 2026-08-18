@@ -18,18 +18,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          fetch-depth: 0
 
       - name: Upstream Sync
         id: sync
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
         with:
-          target_sync_branch: gh-pages
+          target_sync_branch: master
           target_repo_token: ${{ secrets.GITHUB_TOKEN }}
           upstream_sync_repo: jaywcjlove/linux-command
-          upstream_sync_branch: gh-pages
+          upstream_sync_branch: master
           test_mode: false
 
       - name: Trigger deploy event on new commits
