@@ -1,0 +1,65 @@
+name: Upstream Sync
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+on:
+  schedule:
+    - cron: '0 23 * * *' 
+  workflow_dispatch:    # 手动触发
+
+jobs:
+  sync_latest_from_upstream:
+    name: Sync latest commits from upstream repo
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.fork }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Clean issue notice
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'close-issues'
+          labels: '🚨 Sync Fail'
+
+      - name: Upstream Sync
+        id: sync
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+        with:
+          target_sync_branch: gh-pages
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_sync_repo: jaywcjlove/linux-command
+          upstream_sync_branch: gh-pages
+          test_mode: false
+
+      - name: Trigger deploy event on new commits
+        if: steps.sync.outputs.has_new_commits == 'true'
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'deploy'
+            })
+
+      - name: Sync check
+        if: failure()
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'create-issue'
+          title: '🚨 同步失败 | Sync Fail'
+          labels: '🚨 Sync Fail'
+          body: |
+            由于上游仓库的 workflow 文件变更或网络问题，导致 GitHub 自动暂停了本次自动更新。
+            
+            请尝试以下操作：
+            1. 手动点击 "Sync Fork" 按钮同步一次
+            2. 检查上游仓库 jaywcjlove/linux-command 的 gh-pages 分支状态
+            3. 查看本 Workflow 的运行日志获取详细错误信息
